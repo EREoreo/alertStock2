@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Settings, BarChart3, Bell, Plus, Trash2, Edit3, Volume2, Loader2 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 const StockPriceMonitor = () => {
   // State управление

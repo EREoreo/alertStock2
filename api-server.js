@@ -2,18 +2,25 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import https from 'https';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from dist directory (React build)
+app.use(express.static(path.join(__dirname, 'dist')));
+
 // FinViz конфигурация
 const config = {
     baseUrl: 'https://elite.finviz.com/quote_export.ashx',
-    auth: '56d25c88-21a3-47a8-ad5a-605f01591d43'
+    auth: process.env.FINVIZ_API_KEY || '56d25c88-21a3-47a8-ad5a-605f01591d43'
 };
 
 // Функция для получения цены акции
@@ -84,8 +91,12 @@ async function getStockPrice(symbol) {
 // Функция для загрузки тикеров из CSV файлов
 async function loadTickers() {
     try {
-        const nasdaqData = await fs.promises.readFile('all nasdaq.csv', 'utf-8');
-        const nyseData = await fs.promises.readFile('all nyse.csv', 'utf-8');
+        const nasdaqData = await fs.promises.readFile(
+            path.join(__dirname, 'all nasdaq.csv'), 'utf-8'
+        );
+        const nyseData = await fs.promises.readFile(
+            path.join(__dirname, 'all nyse.csv'), 'utf-8'
+        );
         
         const nasdaqTickers = nasdaqData.split('\n')
             .map(line => line.trim())
@@ -236,24 +247,26 @@ app.get('/api/health', (req, res) => {
         success: true,
         status: 'OK',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 
+// Catch-all handler: отправляем React приложение для всех не-API маршрутов
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 // Запуск сервера
-app.listen(PORT, () => {
-    console.log(`🚀 Backend API Server запущен на порту ${PORT}`);
-    console.log(`📡 API доступен по адресу: http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log('\n📋 Доступные endpoints:');
     console.log(`  GET  /api/health                    - проверка работоспособности`);
     console.log(`  GET  /api/search/:query             - поиск тикеров`);
     console.log(`  GET  /api/stock/:symbol             - получение цены акции`);
     console.log(`  POST /api/stocks/batch              - получение цен нескольких акций`);
     console.log(`  GET  /api/tickers                   - список всех тикеров`);
-    console.log('\n💡 Примеры использования:');
-    console.log(`  curl http://localhost:${PORT}/api/search/AAPL`);
-    console.log(`  curl http://localhost:${PORT}/api/stock/MSFT`);
-    console.log(`  curl -X POST http://localhost:${PORT}/api/stocks/batch -H "Content-Type: application/json" -d '{"symbols":["AAPL","MSFT","GOOGL"]}'`);
 });
 
 export default app;
