@@ -28,6 +28,12 @@ const StockPriceMonitor = () => {
   const playAlertSound = () => {
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
       // Три коротких сигнала
       for (let i = 0; i < 3; i++) {
         setTimeout(() => {
@@ -52,8 +58,7 @@ const StockPriceMonitor = () => {
   // Сохранение и загрузка из localStorage
   const saveToLocalStorage = (key, data) => {
     try {
-      const serializedData = JSON.stringify(data);
-      localStorage.setItem(key, serializedData);
+      localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
       console.error('Ошибка сохранения:', error);
     }
@@ -62,15 +67,7 @@ const StockPriceMonitor = () => {
   const loadFromLocalStorage = (key, defaultValue) => {
     try {
       const saved = localStorage.getItem(key);
-      if (!saved) return defaultValue;
-
-      let parsed = JSON.parse(saved);
-      // Если парсинг дал не объект — верни дефолт
-      if (typeof parsed !== 'object' || parsed === null) {
-        return defaultValue;
-      }
-
-      return parsed;
+      return saved ? JSON.parse(saved) : defaultValue;
     } catch (error) {
       console.error('Ошибка загрузки:', error);
       return defaultValue;
@@ -135,47 +132,43 @@ const StockPriceMonitor = () => {
         setWatchlist(updatedWatchlist);
         saveToLocalStorage('watchlist', updatedWatchlist);
 
-        // Обновляем алерты только если они существуют
-        if (alerts && Object.keys(alerts).length > 0) {
-          const updatedAlerts = { ...alerts };
-          let soundPlayed = false;
+        // Обновляем алерты
+        const updatedAlerts = { ...alerts };
+        let soundPlayed = false;
 
-          Object.keys(updatedAlerts).forEach(column => {
-            if (Array.isArray(updatedAlerts[column])) {
-              updatedAlerts[column] = updatedAlerts[column].map(alert => {
-                const stockData = data.data.find(d => d.symbol === alert.symbol);
-                if (stockData) {
-                  const prevStatus = alert.status;
-                  const newAlert = { ...alert, currentPrice: stockData.price };
-                  
-                  // Определяем статус
-                  if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
-                    newAlert.status = 'in-range';
-                    newAlert.percentDiff = 0;
-                    
-                    // Играем звук при входе в диапазон
-                    if (prevStatus !== 'in-range' && !soundPlayed) {
-                      playAlertSound();
-                      soundPlayed = true;
-                    }
-                  } else if (stockData.price > alert.maxPrice) {
-                    newAlert.status = 'above';
-                    newAlert.percentDiff = ((stockData.price - alert.maxPrice) / alert.maxPrice * 100).toFixed(1);
-                  } else {
-                    newAlert.status = 'below';
-                    newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
-                  }
-                  
-                  return newAlert;
+        Object.keys(updatedAlerts).forEach(column => {
+          updatedAlerts[column] = updatedAlerts[column].map(alert => {
+            const stockData = data.data.find(d => d.symbol === alert.symbol);
+            if (stockData) {
+              const prevStatus = alert.status;
+              const newAlert = { ...alert, currentPrice: stockData.price };
+              
+              // Определяем статус
+              if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
+                newAlert.status = 'in-range';
+                newAlert.percentDiff = 0;
+                
+                // Играем звук при входе в диапазон
+                if (prevStatus !== 'in-range' && !soundPlayed) {
+                  playAlertSound();
+                  soundPlayed = true;
                 }
-                return alert;
-              });
+              } else if (stockData.price > alert.maxPrice) {
+                newAlert.status = 'above';
+                newAlert.percentDiff = ((stockData.price - alert.maxPrice) / alert.maxPrice * 100).toFixed(1);
+              } else {
+                newAlert.status = 'below';
+                newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
+              }
+              
+              return newAlert;
             }
+            return alert;
           });
+        });
 
-          setAlerts(updatedAlerts);
-          saveToLocalStorage('alerts', updatedAlerts);
-        }
+        setAlerts(updatedAlerts);
+        saveToLocalStorage('alerts', updatedAlerts);
         setIsConnected(true);
       }
     } catch (error) {
@@ -229,13 +222,10 @@ const StockPriceMonitor = () => {
     }
 
     const stock = watchlist.find(s => s.symbol === alertForm.symbol);
-    if (!stock) {
-      alert('Акция не найдена в watchlist');
-      return;
-    }
+    if (!stock) return;
 
     const newAlert = {
-      id: Date.now() + Math.random(), // уникальный ID
+      id: Date.now(),
       symbol: alertForm.symbol,
       minPrice,
       maxPrice,
@@ -256,10 +246,8 @@ const StockPriceMonitor = () => {
     }
 
     // Добавляем в первую колонку
-    const newAlerts = { 
-      ...alerts,
-      column1: [...alerts.column1, newAlert]
-    };
+    const newAlerts = { ...alerts };
+    newAlerts.column1 = [...newAlerts.column1, newAlert];
     
     setAlerts(newAlerts);
     saveToLocalStorage('alerts', newAlerts);
@@ -314,17 +302,8 @@ const StockPriceMonitor = () => {
       column3: []
     });
     
-    // Проверка: если savedAlerts не объект — используй дефолт
-    const alertsToSet = typeof savedAlerts === 'object' && savedAlerts !== null
-      ? { ...savedAlerts }
-      : {
-          column1: [],
-          column2: [],
-          column3: []
-        };
-
     setWatchlist(savedWatchlist);
-    setAlerts(alertsToSet);
+    setAlerts(savedAlerts);
   }, []);
 
   useEffect(() => {
@@ -438,10 +417,10 @@ const StockPriceMonitor = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="font-semibold">{stock.symbol}</div>
-                    <div className="text-2xl font-bold">${stock.price?.toFixed(2) || 'N/A'}</div>
+                    <div className="text-2xl font-bold">${stock.price?.toFixed(2)}</div>
                     <div className={`text-sm flex items-center ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {stock.change >= 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                      {stock.change >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2) || '0.00'}%
+                      {stock.change >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
                     </div>
                   </div>
                   <button
@@ -498,18 +477,12 @@ const StockPriceMonitor = () => {
             >
               <h3 className="text-sm text-gray-400 mb-4">Section {index + 1}</h3>
               <div className="space-y-3">
-                {Array.isArray(alerts[column]) ? (
-                  alerts[column].map(alert => (
-                    <AlertCard key={alert.id} alert={alert} column={column} />
-                  ))
-                ) : (
-                  <div className="text-center text-gray-500 text-sm py-8">
-                    Drop alerts here
-                  </div>
-                )}
+                {alerts[column].map(alert => (
+                  <AlertCard key={alert.id} alert={alert} column={column} />
+                ))}
               </div>
               
-              {Array.isArray(alerts[column]) && alerts[column].length === 0 && (
+              {alerts[column].length === 0 && (
                 <div className="text-center text-gray-500 text-sm py-8">
                   Drop alerts here
                 </div>
@@ -536,7 +509,7 @@ const StockPriceMonitor = () => {
                   <option value="">Choose stock...</option>
                   {watchlist.map(stock => (
                     <option key={stock.symbol} value={stock.symbol}>
-                      {stock.symbol} - ${stock.price?.toFixed(2) || 'N/A'}
+                      {stock.symbol} - ${stock.price?.toFixed(2)}
                     </option>
                   ))}
                 </select>
