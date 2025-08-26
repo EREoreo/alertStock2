@@ -52,11 +52,8 @@ const StockPriceMonitor = () => {
   // Сохранение и загрузка из localStorage
   const saveToLocalStorage = (key, data) => {
     try {
-      if (typeof data === 'object') {
-        localStorage.setItem(key, JSON.stringify(data));
-      } else {
-        localStorage.setItem(key, data);
-      }
+      const serializedData = JSON.stringify(data);
+      localStorage.setItem(key, serializedData);
     } catch (error) {
       console.error('Ошибка сохранения:', error);
     }
@@ -138,43 +135,47 @@ const StockPriceMonitor = () => {
         setWatchlist(updatedWatchlist);
         saveToLocalStorage('watchlist', updatedWatchlist);
 
-        // Обновляем алерты
-        const updatedAlerts = { ...alerts };
-        let soundPlayed = false;
+        // Обновляем алерты только если они существуют
+        if (alerts && Object.keys(alerts).length > 0) {
+          const updatedAlerts = { ...alerts };
+          let soundPlayed = false;
 
-        Object.keys(updatedAlerts).forEach(column => {
-          updatedAlerts[column] = updatedAlerts[column].map(alert => {
-            const stockData = data.data.find(d => d.symbol === alert.symbol);
-            if (stockData) {
-              const prevStatus = alert.status;
-              const newAlert = { ...alert, currentPrice: stockData.price };
-              
-              // Определяем статус
-              if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
-                newAlert.status = 'in-range';
-                newAlert.percentDiff = 0;
-                
-                // Играем звук при входе в диапазон
-                if (prevStatus !== 'in-range' && !soundPlayed) {
-                  playAlertSound();
-                  soundPlayed = true;
+          Object.keys(updatedAlerts).forEach(column => {
+            if (Array.isArray(updatedAlerts[column])) {
+              updatedAlerts[column] = updatedAlerts[column].map(alert => {
+                const stockData = data.data.find(d => d.symbol === alert.symbol);
+                if (stockData) {
+                  const prevStatus = alert.status;
+                  const newAlert = { ...alert, currentPrice: stockData.price };
+                  
+                  // Определяем статус
+                  if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
+                    newAlert.status = 'in-range';
+                    newAlert.percentDiff = 0;
+                    
+                    // Играем звук при входе в диапазон
+                    if (prevStatus !== 'in-range' && !soundPlayed) {
+                      playAlertSound();
+                      soundPlayed = true;
+                    }
+                  } else if (stockData.price > alert.maxPrice) {
+                    newAlert.status = 'above';
+                    newAlert.percentDiff = ((stockData.price - alert.maxPrice) / alert.maxPrice * 100).toFixed(1);
+                  } else {
+                    newAlert.status = 'below';
+                    newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
+                  }
+                  
+                  return newAlert;
                 }
-              } else if (stockData.price > alert.maxPrice) {
-                newAlert.status = 'above';
-                newAlert.percentDiff = ((stockData.price - alert.maxPrice) / alert.maxPrice * 100).toFixed(1);
-              } else {
-                newAlert.status = 'below';
-                newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
-              }
-              
-              return newAlert;
+                return alert;
+              });
             }
-            return alert;
           });
-        });
 
-        setAlerts(updatedAlerts);
-        saveToLocalStorage('alerts', updatedAlerts);
+          setAlerts(updatedAlerts);
+          saveToLocalStorage('alerts', updatedAlerts);
+        }
         setIsConnected(true);
       }
     } catch (error) {
@@ -228,10 +229,13 @@ const StockPriceMonitor = () => {
     }
 
     const stock = watchlist.find(s => s.symbol === alertForm.symbol);
-    if (!stock) return;
+    if (!stock) {
+      alert('Акция не найдена в watchlist');
+      return;
+    }
 
     const newAlert = {
-      id: Date.now(),
+      id: Date.now() + Math.random(), // уникальный ID
       symbol: alertForm.symbol,
       minPrice,
       maxPrice,
@@ -252,8 +256,10 @@ const StockPriceMonitor = () => {
     }
 
     // Добавляем в первую колонку
-    const newAlerts = { ...alerts };
-    newAlerts.column1 = [...newAlerts.column1, newAlert];
+    const newAlerts = { 
+      ...alerts,
+      column1: [...alerts.column1, newAlert]
+    };
     
     setAlerts(newAlerts);
     saveToLocalStorage('alerts', newAlerts);
