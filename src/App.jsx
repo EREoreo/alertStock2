@@ -131,8 +131,6 @@ const StockPriceMonitor = () => {
 
   const updatePrices = async () => {
     console.log('🔄 [UPDATE] === НАЧАЛО ОБНОВЛЕНИЯ ЦЕН ===');
-    console.log('🔄 [UPDATE] Текущий watchlist:', watchlist);
-    console.log('🔄 [UPDATE] Текущие алерты перед обновлением:', JSON.parse(JSON.stringify(alerts)));
     
     // Получаем актуальный watchlist из localStorage чтобы избежать замыкания
     const currentWatchlist = loadFromLocalStorage('watchlist', []);
@@ -166,68 +164,65 @@ const StockPriceMonitor = () => {
         setWatchlist(updatedWatchlist);
         saveToLocalStorage('watchlist', updatedWatchlist);
 
-        // Получаем актуальные алерты из localStorage
-        const currentAlerts = loadFromLocalStorage('alerts', {
-          column1: [],
-          column2: [],
-          column3: []
-        });
-        
-        console.log('🚨 [UPDATE] Алерты из localStorage:', currentAlerts);
-        
-        // Убедимся что структура правильная
-        const safeAlerts = {
-          column1: Array.isArray(currentAlerts?.column1) ? currentAlerts.column1 : [],
-          column2: Array.isArray(currentAlerts?.column2) ? currentAlerts.column2 : [],
-          column3: Array.isArray(currentAlerts?.column3) ? currentAlerts.column3 : []
-        };
-        
-        console.log('🚨 [UPDATE] Safe alerts:', safeAlerts);
-        
-        const updatedAlerts = { ...safeAlerts };
-        let soundPlayed = false;
-
-        // Обновляем только цены в алертах
-        Object.keys(updatedAlerts).forEach(column => {
-          console.log(`🚨 [UPDATE] Обрабатываем колонку ${column}, алертов: ${updatedAlerts[column].length}`);
+        // Обновляем алерты используя setState с callback для получения актуального состояния
+        setAlerts(prevAlerts => {
+          console.log('🚨 [UPDATE] Алерты из состояния React:', prevAlerts);
           
-          updatedAlerts[column] = updatedAlerts[column].map(alert => {
-            const stockData = data.data.find(d => d.symbol === alert.symbol);
-            if (stockData) {
-              console.log(`💱 [UPDATE] Обновляем ${alert.symbol}: ${alert.currentPrice} → ${stockData.price}`);
-              const prevStatus = alert.status;
-              const newAlert = { ...alert, currentPrice: stockData.price };
-              
-              // Определяем статус
-              if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
-                newAlert.status = 'in-range';
-                newAlert.percentDiff = 0;
-                
-                if (prevStatus !== 'in-range' && prevStatus !== 'pending' && !soundPlayed) {
-                  console.log(`🔔 [UPDATE] ${alert.symbol} вошел в диапазон!`);
-                  playAlertSound();
-                  soundPlayed = true;
-                }
-              } else if (stockData.price > alert.maxPrice) {
-                newAlert.status = 'above';
-                newAlert.percentDiff = ((stockData.price - alert.maxPrice) / alert.maxPrice * 100).toFixed(1);
-              } else {
-                newAlert.status = 'below';
-                newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
-              }
-              
-              console.log(`💱 [UPDATE] ${alert.symbol}: ${prevStatus} → ${newAlert.status}`);
-              return newAlert;
-            } else {
-              console.log(`⚠️ [UPDATE] Нет данных для ${alert.symbol}`);
-            }
-            return alert;
-          });
-        });
+          // Убедимся что структура правильная
+          const safeAlerts = {
+            column1: Array.isArray(prevAlerts?.column1) ? prevAlerts.column1 : [],
+            column2: Array.isArray(prevAlerts?.column2) ? prevAlerts.column2 : [],
+            column3: Array.isArray(prevAlerts?.column3) ? prevAlerts.column3 : []
+          };
+          
+          console.log('🚨 [UPDATE] Safe alerts:', safeAlerts);
+          
+          const updatedAlerts = { ...safeAlerts };
+          let soundPlayed = false;
 
-        console.log('🚨 [UPDATE] Алерты после обновления:', updatedAlerts);
-        setAlerts(updatedAlerts);
-        saveToLocalStorage('alerts', updatedAlerts);
+          // Обновляем только цены в алертах
+          Object.keys(updatedAlerts).forEach(column => {
+            console.log(`🚨 [UPDATE] Обрабатываем колонку ${column}, алертов: ${updatedAlerts[column].length}`);
+            
+            updatedAlerts[column] = updatedAlerts[column].map(alert => {
+              const stockData = data.data.find(d => d.symbol === alert.symbol);
+              if (stockData) {
+                console.log(`💱 [UPDATE] Обновляем ${alert.symbol}: ${alert.currentPrice} → ${stockData.price}`);
+                const prevStatus = alert.status;
+                const newAlert = { ...alert, currentPrice: stockData.price };
+                
+                // Определяем статус
+                if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
+                  newAlert.status = 'in-range';
+                  newAlert.percentDiff = 0;
+                  
+                  if (prevStatus !== 'in-range' && prevStatus !== 'pending' && !soundPlayed) {
+                    console.log(`🔔 [UPDATE] ${alert.symbol} вошел в диапазон!`);
+                    playAlertSound();
+                    soundPlayed = true;
+                  }
+                } else if (stockData.price > alert.maxPrice) {
+                  newAlert.status = 'above';
+                  newAlert.percentDiff = ((stockData.price - alert.maxPrice) / alert.maxPrice * 100).toFixed(1);
+                } else {
+                  newAlert.status = 'below';
+                  newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
+                }
+                
+                console.log(`💱 [UPDATE] ${alert.symbol}: ${prevStatus} → ${newAlert.status}`);
+                return newAlert;
+              } else {
+                console.log(`⚠️ [UPDATE] Нет данных для ${alert.symbol}`);
+              }
+              return alert;
+            });
+          });
+
+          console.log('🚨 [UPDATE] Алерты после обновления:', updatedAlerts);
+          saveToLocalStorage('alerts', updatedAlerts);
+          return updatedAlerts;
+        });
+        
         setIsConnected(true);
         console.log('✅ [UPDATE] === ОБНОВЛЕНИЕ ЗАВЕРШЕНО ===');
       }
