@@ -484,7 +484,7 @@ const StockPriceMonitor = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex">
+    <div className="min-h-screen bg-gray-900 text-white flex w-screen">
       {/* Левая панель - Watchlist */}
       <div className="w-1/4 bg-gray-800 border-r border-gray-700 p-4">
         <div className="mb-4">
