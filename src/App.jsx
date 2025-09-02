@@ -4,9 +4,6 @@ import { Search, Trash2, Plus, Settings, TrendingUp, TrendingDown, Bell } from '
 const API_BASE_URL = '/api';
 
 const StockPriceMonitor = () => {
-  console.log('🎬 [RENDER] Компонент рендерится');
-  
-  // State управление
   const [watchlist, setWatchlist] = useState([]);
   const [alerts, setAlerts] = useState({
     column1: [],
@@ -26,11 +23,7 @@ const StockPriceMonitor = () => {
   const [draggedAlert, setDraggedAlert] = useState(null);
   const [draggedFromColumn, setDraggedFromColumn] = useState(null);
   
-  console.log('📊 [STATE] Текущие алерты:', alerts);
-  
-  // Звуковое уведомление
   const playAlertSound = () => {
-    console.log('🔔 [SOUND] Воспроизводим звук алерта');
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       for (let i = 0; i < 3; i++) {
@@ -39,59 +32,40 @@ const StockPriceMonitor = () => {
           const gain = audioContext.createGain();
           osc.connect(gain);
           gain.connect(audioContext.destination);
-          
           osc.frequency.setValueAtTime(800, audioContext.currentTime);
           gain.gain.setValueAtTime(0.5, audioContext.currentTime);
           gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-          
           osc.start(audioContext.currentTime);
           osc.stop(audioContext.currentTime + 0.1);
         }, i * 150);
       }
     } catch (error) {
-      console.error('❌ [SOUND] Ошибка воспроизведения звука:', error);
+      console.error('Ошибка звука:', error);
     }
   };
 
-  // Сохранение и загрузка из localStorage
   const saveToLocalStorage = (key, data) => {
     try {
-      console.log(`💾 [SAVE] Сохраняем ${key}:`, data);
-      const serializedData = JSON.stringify(data);
-      localStorage.setItem(key, serializedData);
-      console.log(`✅ [SAVE] Успешно сохранено ${key}`);
+      localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
-      console.error(`❌ [SAVE] Ошибка сохранения ${key}:`, error);
+      console.error(`Ошибка сохранения ${key}:`, error);
     }
   };
 
   const loadFromLocalStorage = (key, defaultValue) => {
     try {
-      console.log(`📂 [LOAD] Загружаем ${key}...`);
       const saved = localStorage.getItem(key);
-      if (!saved) {
-        console.log(`⚠️ [LOAD] ${key} не найден, используем default:`, defaultValue);
-        return defaultValue;
-      }
-
-      let parsed = JSON.parse(saved);
-      console.log(`✅ [LOAD] Загружено ${key}:`, parsed);
-      
-      if (typeof parsed !== 'object' || parsed === null) {
-        console.warn(`⚠️ [LOAD] ${key} не объект, используем default`);
-        return defaultValue;
-      }
-
+      if (!saved) return defaultValue;
+      const parsed = JSON.parse(saved);
+      if (typeof parsed !== 'object' || parsed === null) return defaultValue;
       return parsed;
     } catch (error) {
-      console.error(`❌ [LOAD] Ошибка загрузки ${key}:`, error);
+      console.error(`Ошибка загрузки ${key}:`, error);
       return defaultValue;
     }
   };
 
-  // API функции
   const searchTickers = async (query) => {
-    console.log(`🔍 [SEARCH] Поиск тикеров: "${query}"`);
     if (!query.trim()) {
       setSearchResults([]);
       return;
@@ -101,12 +75,11 @@ const StockPriceMonitor = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/search/${encodeURIComponent(query)}`);
       const data = await response.json();
-      console.log('🔍 [SEARCH] Результаты:', data);
       if (data.success) {
         setSearchResults(data.results);
       }
     } catch (error) {
-      console.error('❌ [SEARCH] Ошибка:', error);
+      console.error('Ошибка поиска:', error);
       setSearchResults([]);
     } finally {
       setLoading(false);
@@ -114,90 +87,63 @@ const StockPriceMonitor = () => {
   };
 
   const getStockData = async (symbol) => {
-    console.log(`📈 [STOCK] Получаем данные для ${symbol}`);
     try {
       const response = await fetch(`${API_BASE_URL}/stock/${symbol}`);
       const data = await response.json();
-      console.log(`📈 [STOCK] Данные ${symbol}:`, data);
       if (data.success) {
         return data.data;
       }
       return null;
     } catch (error) {
-      console.error(`❌ [STOCK] Ошибка получения ${symbol}:`, error);
+      console.error(`Ошибка получения ${symbol}:`, error);
       return null;
     }
   };
 
   const updatePrices = async () => {
-    console.log('🔄 [UPDATE] === НАЧАЛО ОБНОВЛЕНИЯ ЦЕН ===');
-    
-    // Получаем актуальный watchlist из localStorage чтобы избежать замыкания
     const currentWatchlist = loadFromLocalStorage('watchlist', []);
-    console.log('🔄 [UPDATE] Watchlist из localStorage:', currentWatchlist);
-    
-    if (!currentWatchlist || currentWatchlist.length === 0) {
-      console.log('⚠️ [UPDATE] Watchlist пуст, пропускаем обновление');
-      return;
-    }
+    if (!currentWatchlist || currentWatchlist.length === 0) return;
 
     try {
-      console.log('📡 [UPDATE] Отправляем запрос для:', currentWatchlist.map(s => s.symbol));
       const response = await fetch(`${API_BASE_URL}/stocks/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          symbols: currentWatchlist.map(s => s.symbol) 
-        })
+        body: JSON.stringify({ symbols: currentWatchlist.map(s => s.symbol) })
       });
 
       const data = await response.json();
-      console.log('📡 [UPDATE] Ответ от сервера:', data);
       
       if (data.success) {
-        // Обновляем watchlist
         const updatedWatchlist = currentWatchlist.map(stock => {
           const newData = data.data.find(d => d.symbol === stock.symbol);
           return newData ? { ...newData } : stock;
         });
-        console.log('📈 [UPDATE] Обновленный watchlist:', updatedWatchlist);
         setWatchlist(updatedWatchlist);
         saveToLocalStorage('watchlist', updatedWatchlist);
 
-        // Обновляем алерты используя setState с callback для получения актуального состояния
         setAlerts(prevAlerts => {
-          console.log('🚨 [UPDATE] Алерты из состояния React:', prevAlerts);
-          
-          // Убедимся что структура правильная
           const safeAlerts = {
             column1: Array.isArray(prevAlerts?.column1) ? prevAlerts.column1 : [],
             column2: Array.isArray(prevAlerts?.column2) ? prevAlerts.column2 : [],
             column3: Array.isArray(prevAlerts?.column3) ? prevAlerts.column3 : []
           };
           
-          console.log('🚨 [UPDATE] Safe alerts:', safeAlerts);
-          
           const updatedAlerts = { ...safeAlerts };
           let soundPlayed = false;
 
-          // Обновляем только цены в алертах
           Object.keys(updatedAlerts).forEach(column => {
-            console.log(`🚨 [UPDATE] Обрабатываем колонку ${column}, алертов: ${updatedAlerts[column].length}`);
-            
             updatedAlerts[column] = updatedAlerts[column].map(alert => {
               const stockData = data.data.find(d => d.symbol === alert.symbol);
               if (stockData) {
-                console.log(`💱 [UPDATE] Обновляем ${alert.symbol}: ${alert.currentPrice} → ${stockData.price}`);
                 const prevStatus = alert.status;
                 const newAlert = { ...alert, currentPrice: stockData.price };
                 
-                // Определяем статус
                 if (stockData.price >= alert.minPrice && stockData.price <= alert.maxPrice) {
                   newAlert.status = 'in-range';
                   newAlert.percentDiff = 0;
                   
                   if (prevStatus !== 'in-range' && prevStatus !== 'pending' && !soundPlayed) {
-                    console.log(`🔔 [UPDATE] ${alert.symbol} вошел в диапазон!`);
+                    console.log(`🔔 ${alert.symbol} вошел в диапазон!`);
                     playAlertSound();
                     soundPlayed = true;
                   }
@@ -209,31 +155,25 @@ const StockPriceMonitor = () => {
                   newAlert.percentDiff = ((alert.minPrice - stockData.price) / alert.minPrice * 100).toFixed(1);
                 }
                 
-                console.log(`💱 [UPDATE] ${alert.symbol}: ${prevStatus} → ${newAlert.status}`);
                 return newAlert;
-              } else {
-                console.log(`⚠️ [UPDATE] Нет данных для ${alert.symbol}`);
               }
               return alert;
             });
           });
 
-          console.log('🚨 [UPDATE] Алерты после обновления:', updatedAlerts);
           saveToLocalStorage('alerts', updatedAlerts);
           return updatedAlerts;
         });
         
         setIsConnected(true);
-        console.log('✅ [UPDATE] === ОБНОВЛЕНИЕ ЗАВЕРШЕНО ===');
       }
     } catch (error) {
-      console.error('❌ [UPDATE] Ошибка обновления:', error);
+      console.error('Ошибка обновления:', error);
       setIsConnected(false);
     }
   };
 
   const addToWatchlist = async (symbol) => {
-    console.log(`➕ [WATCHLIST] Добавляем ${symbol}`);
     if (watchlist.some(s => s.symbol === symbol)) {
       alert(`${symbol} уже в watchlist`);
       return;
@@ -242,7 +182,6 @@ const StockPriceMonitor = () => {
     const stockData = await getStockData(symbol);
     if (stockData) {
       const newWatchlist = [...watchlist, stockData];
-      console.log('➕ [WATCHLIST] Новый watchlist:', newWatchlist);
       setWatchlist(newWatchlist);
       saveToLocalStorage('watchlist', newWatchlist);
       setSearchQuery('');
@@ -251,28 +190,20 @@ const StockPriceMonitor = () => {
   };
 
   const removeFromWatchlist = (symbol) => {
-    console.log(`🗑️ [WATCHLIST] Удаляем ${symbol}`);
     const newWatchlist = watchlist.filter(s => s.symbol !== symbol);
     setWatchlist(newWatchlist);
     saveToLocalStorage('watchlist', newWatchlist);
     
-    // Удаляем алерты для этой акции
     const newAlerts = { ...alerts };
     Object.keys(newAlerts).forEach(column => {
       newAlerts[column] = newAlerts[column].filter(a => a.symbol !== symbol);
     });
-    console.log('🗑️ [ALERTS] Алерты после удаления:', newAlerts);
     setAlerts(newAlerts);
     saveToLocalStorage('alerts', newAlerts);
   };
 
   const createAlert = () => {
-    console.log('🆕 [ALERT] === СОЗДАНИЕ АЛЕРТА ===');
-    console.log('🆕 [ALERT] Форма:', alertForm);
-    console.log('🆕 [ALERT] Текущие алерты ДО создания:', JSON.parse(JSON.stringify(alerts)));
-    
     if (!alertForm.symbol || !alertForm.minPrice || !alertForm.maxPrice) {
-      console.log('❌ [ALERT] Не все поля заполнены');
       alert('Заполните все поля');
       return;
     }
@@ -281,14 +212,12 @@ const StockPriceMonitor = () => {
     const maxPrice = parseFloat(alertForm.maxPrice);
 
     if (minPrice >= maxPrice) {
-      console.log('❌ [ALERT] Min >= Max');
       alert('Минимальная цена должна быть меньше максимальной');
       return;
     }
 
     const stock = watchlist.find(s => s.symbol === alertForm.symbol);
     if (!stock) {
-      console.log('❌ [ALERT] Акция не в watchlist');
       alert('Акция не найдена в watchlist');
       return;
     }
@@ -303,7 +232,6 @@ const StockPriceMonitor = () => {
       percentDiff: 0
     };
 
-    // Определяем начальный статус
     if (stock.price >= minPrice && stock.price <= maxPrice) {
       newAlert.status = 'in-range';
     } else if (stock.price > maxPrice) {
@@ -314,35 +242,25 @@ const StockPriceMonitor = () => {
       newAlert.percentDiff = ((minPrice - stock.price) / minPrice * 100).toFixed(1);
     }
 
-    console.log('🆕 [ALERT] Новый алерт:', newAlert);
-
-    // Добавляем в первую колонку
     const newAlerts = { 
       ...alerts,
       column1: [...(alerts.column1 || []), newAlert]
     };
     
-    console.log('🆕 [ALERT] Алерты ПОСЛЕ добавления:', newAlerts);
-    
     setAlerts(newAlerts);
     saveToLocalStorage('alerts', newAlerts);
     setShowAlertModal(false);
     setAlertForm({ symbol: '', minPrice: '', maxPrice: '' });
-    
-    console.log('✅ [ALERT] === АЛЕРТ СОЗДАН ===');
   };
 
   const deleteAlert = (columnKey, alertId) => {
-    console.log(`🗑️ [ALERT] Удаляем алерт ${alertId} из ${columnKey}`);
     const newAlerts = { ...alerts };
     newAlerts[columnKey] = newAlerts[columnKey].filter(a => a.id !== alertId);
     setAlerts(newAlerts);
     saveToLocalStorage('alerts', newAlerts);
   };
 
-  // Drag & Drop функции
   const handleDragStart = (alert, column) => {
-    console.log(`🤏 [DRAG] Начинаем перетаскивание ${alert.symbol} из ${column}`);
     setDraggedAlert(alert);
     setDraggedFromColumn(column);
   };
@@ -353,31 +271,22 @@ const StockPriceMonitor = () => {
 
   const handleDrop = (e, targetColumn) => {
     e.preventDefault();
-    console.log(`👋 [DROP] Бросаем в ${targetColumn}`);
     
     if (!draggedAlert || !draggedFromColumn) return;
     
     const newAlerts = { ...alerts };
-    
-    // Удаляем из исходной колонки
     newAlerts[draggedFromColumn] = newAlerts[draggedFromColumn].filter(
       a => a.id !== draggedAlert.id
     );
-    
-    // Добавляем в целевую колонку
     newAlerts[targetColumn] = [...newAlerts[targetColumn], draggedAlert];
     
-    console.log('🤏 [DRAG] Алерты после перетаскивания:', newAlerts);
     setAlerts(newAlerts);
     saveToLocalStorage('alerts', newAlerts);
     setDraggedAlert(null);
     setDraggedFromColumn(null);
   };
 
-  // Effects
   useEffect(() => {
-    console.log('🚀 [INIT] === ИНИЦИАЛИЗАЦИЯ КОМПОНЕНТА ===');
-    
     const savedWatchlist = loadFromLocalStorage('watchlist', []);
     const savedAlerts = loadFromLocalStorage('alerts', {
       column1: [],
@@ -385,41 +294,26 @@ const StockPriceMonitor = () => {
       column3: []
     });
     
-    console.log('🚀 [INIT] Загружен watchlist:', savedWatchlist);
-    console.log('🚀 [INIT] Загружены алерты:', savedAlerts);
-    
-    // Убедимся что структура правильная
     const alertsToSet = {
       column1: Array.isArray(savedAlerts?.column1) ? savedAlerts.column1 : [],
       column2: Array.isArray(savedAlerts?.column2) ? savedAlerts.column2 : [],
       column3: Array.isArray(savedAlerts?.column3) ? savedAlerts.column3 : []
     };
-
-    console.log('🚀 [INIT] Устанавливаем алерты:', alertsToSet);
     
     setWatchlist(savedWatchlist);
     setAlerts(alertsToSet);
-    
-    console.log('✅ [INIT] === ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА ===');
   }, []);
 
   useEffect(() => {
-    console.log('⏰ [INTERVAL] Создаем интервал обновления (каждые 4 сек)');
-    
-    // Первое обновление через 1 секунду после загрузки
     const firstUpdate = setTimeout(() => {
-      console.log('⏰ [INTERVAL] Первое обновление');
       updatePrices();
     }, 1000);
     
-    // Регулярные обновления каждые 4 секунды
     const interval = setInterval(() => {
-      console.log('⏰ [INTERVAL] Плановое обновление');
       updatePrices();
     }, 4000);
     
     return () => {
-      console.log('🛑 [INTERVAL] Очищаем интервалы');
       clearTimeout(firstUpdate);
       clearInterval(interval);
     };
@@ -432,7 +326,6 @@ const StockPriceMonitor = () => {
     return () => clearTimeout(delayedSearch);
   }, [searchQuery]);
 
-  // Компонент алерта
   const AlertCard = ({ alert, column }) => {
     const [showDelete, setShowDelete] = useState(false);
     
@@ -485,7 +378,6 @@ const StockPriceMonitor = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex w-screen">
-      {/* Левая панель - Watchlist */}
       <div className="w-1/4 bg-gray-800 border-r border-gray-700 p-4">
         <div className="mb-4">
           <h2 className="text-lg font-semibold mb-3">Add New Stock</h2>
@@ -555,7 +447,6 @@ const StockPriceMonitor = () => {
         </div>
       </div>
 
-      {/* Правая область - Алерты */}
       <div className="flex-1 p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold flex items-center space-x-2">
@@ -579,7 +470,6 @@ const StockPriceMonitor = () => {
           </div>
         </div>
 
-        {/* Три колонки для алертов */}
         <div className="grid grid-cols-3 gap-6 h-[calc(100vh-140px)]">
           {['column1', 'column2', 'column3'].map((column, index) => (
             <div
@@ -605,7 +495,6 @@ const StockPriceMonitor = () => {
         </div>
       </div>
 
-      {/* Модальное окно для создания алерта */}
       {showAlertModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
